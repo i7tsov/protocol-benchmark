@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package pb;
+//option go_package = "github.com/i7tsov/protocol-benchmark/pb"; 
+
+message Element {
+    string name = 1;
+    string class = 2;
+    string subclass = 3;
+    int32 indicator1  = 4;
+    int32 indicator2 = 5;
+}
+
+message DownloadRequest {
+}
+
+service Server {
+    rpc Download(DownloadRequest) returns (stream Element);
+}
