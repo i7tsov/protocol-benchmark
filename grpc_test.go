@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"log"
 	"net"
 	"testing"
@@ -9,42 +8,26 @@ import (
 	bgrpc "github.com/i7tsov/protocol-benchmark/grpc"
 	"github.com/i7tsov/protocol-benchmark/pb"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/test/bufconn"
+	"google.golang.org/protobuf/proto"
 )
 
 func BenchmarkGRPCMem100k(b *testing.B) {
-	runGRPCBench(100000, b.N, false)
-}
-
-func BenchmarkGRPCMem10k(b *testing.B) {
-	runGRPCBench(10000, b.N, false)
-}
-
-func BenchmarkGRPCMem1k(b *testing.B) {
-	runGRPCBench(1000, b.N, false)
+	runGRPCMemBench(100000, b.N)
 }
 
 func BenchmarkGRPCMem10(b *testing.B) {
-	runGRPCBench(10, b.N, false)
+	runGRPCMemBench(10, b.N)
 }
 
 func BenchmarkGRPCNet100k(b *testing.B) {
-	runGRPCBench(100000, b.N, true)
-}
-
-func BenchmarkGRPCNet10k(b *testing.B) {
-	runGRPCBench(10000, b.N, true)
-}
-
-func BenchmarkGRPCNet1k(b *testing.B) {
-	runGRPCBench(1000, b.N, true)
+	runGRPCNetBench(100000, b.N)
 }
 
 func BenchmarkGRPCNet10(b *testing.B) {
-	runGRPCBench(10, b.N, true)
+	runGRPCNetBench(10, b.N)
 }
 
-func runGRPCBench(msgCount, num int, useNet bool) {
+func runGRPCNetBench(msgCount, num int) {
 	serv := bgrpc.Server{
 		Elements: bgrpc.Generate(msgCount),
 	}
@@ -53,32 +36,15 @@ func runGRPCBench(msgCount, num int, useNet bool) {
 	var err error
 	s := grpc.NewServer()
 	pb.RegisterServerServer(s, serv)
-	if useNet {
-		lis, err := net.Listen("tcp", ":9091")
-		if err != nil {
-			log.Fatalf("Failed to listen: %v", err)
-		}
-		go s.Serve(lis)
-		conn, err = grpc.Dial("localhost:9091", grpc.WithInsecure())
-		if err != nil {
-			log.Fatalf("Error: %v", err)
-		}
-	} else {
-		const bufSize = 64 * 1024
-		lis := bufconn.Listen(bufSize)
-		go func() {
-			if err := s.Serve(lis); err != nil {
-				log.Fatalf("Error: %v", err)
-			}
-		}()
-		conn, err = grpc.DialContext(context.Background(), "bufconn",
-			grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) {
-				return lis.Dial()
-			}),
-			grpc.WithInsecure())
-		if err != nil {
-			log.Fatalf("Error: %v", err)
-		}
+
+	lis, err := net.Listen("tcp", ":9091")
+	if err != nil {
+		log.Fatalf("Failed to listen: %v", err)
+	}
+	go s.Serve(lis)
+	conn, err = grpc.Dial("localhost:9091", grpc.WithInsecure())
+	if err != nil {
+		log.Fatalf("Error: %v", err)
 	}
 
 	defer conn.Close()
@@ -95,7 +61,21 @@ func runGRPCBench(msgCount, num int, useNet bool) {
 		_ = elements
 	}
 
-	if useNet {
-		s.Stop()
+	s.Stop()
+}
+
+func runGRPCMemBench(msgCount, num int) {
+	arr := bgrpc.Generate(msgCount)
+
+	for i := 0; i < num; i++ {
+		for j := 0; j < len(arr); j++ {
+			pl, err := proto.Marshal(&arr[j])
+			if err != nil {
+				log.Fatalf("Error: %v", err)
+			}
+			msg := pb.Element{}
+			err = proto.Unmarshal(pl, &msg)
+		}
 	}
+
 }
